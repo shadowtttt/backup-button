@@ -21,7 +21,7 @@ h1{font-size:18px;font-weight:500;color:#9bb0cc;margin-bottom:8px;letter-spacing
 .btn.error,.btn-small.error{border-color:#9e4a4a;color:#9e4a4a;background:radial-gradient(circle at 40% 40%,#2e0f0f,#1a0a0a)}
 @keyframes pulse{0%,100%{box-shadow:0 0 10px rgba(58,143,212,0.1)}50%{box-shadow:0 0 30px rgba(58,143,212,0.3)}}
 .whisper{margin-top:32px;font-size:12px;color:#8aadc5;min-height:20px;font-style:italic;transition:opacity 0.5s}
-.status{margin-top:12px;font-size:13px;color:#9bb5ce;min-height:24px;line-height:1.6}
+.status{margin-top:12px;font-size:13px;color:#9bb5ce;min-height:24px;line-height:1.6;word-break:break-all}
 .info{margin-top:40px;font-size:12px;color:#7a9ab8;line-height:2}
 .info span{color:#9bb5ce}
 .overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(6,8,16,0.85);z-index:10;align-items:center;justify-content:center}
@@ -123,9 +123,72 @@ function onAuthFail(){
   document.getElementById("status").textContent="PIN\u9519\u8bef";
 }
 
-async function doDownload(){var b=document.getElementById("dlbtn");b.className="btn-small loading";b.textContent="...";try{var res=await fetch(SB_URL+"/functions/v1/export-local",{method:"POST",headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}});if(res.status===401){b.className="btn-small error";b.textContent="PIN";onAuthFail();setTimeout(function(){b.className="btn-small";b.textContent="LOCAL"},2000);return}var data=await res.json();if(data.error)throw new Error(data.error);var now=new Date();var ts=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"_"+pad(now.getHours())+pad(now.getMinutes());var jsonStr=JSON.stringify(data,null,2);var file=new File([jsonStr],"memoria_"+ts+".json",{type:"application/json"});if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:"Memoria Backup"})}else{var blob=new Blob([jsonStr],{type:"application/json"});var a=document.createElement("a");a.href=window.URL.createObjectURL(blob);a.download="memoria_"+ts+".json";a.style.display="none";document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){window.URL.revokeObjectURL(a.href)},1000)}b.className="btn-small success";b.textContent="DONE";localStorage.setItem("local_last",now.toISOString());localStorage.setItem("backup_entries",String(data.entries_count));localStorage.setItem("backup_notes",String(data.notes_count));loadStats()}catch(e){b.className="btn-small error";b.textContent="FAIL"}setTimeout(function(){b.className="btn-small";b.textContent="LOCAL"},3000)}
+function triggerDownload(jsonStr, filename) {
+  var blob = new Blob([jsonStr], {type: "application/json"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url) }, 3000);
+}
 
-async function doBackup(){var btn=document.getElementById("btn"),status=document.getElementById("status");btn.className="btn loading";btn.textContent="...";status.textContent="";document.getElementById("whisper").style.opacity="0";try{var res=await fetch(API_URL,{method:"POST",headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}});if(res.status===401){btn.className="btn error";btn.textContent="PIN";onAuthFail();setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},2000);return}var data=await res.json();if(data.success){btn.className="btn success";btn.textContent="DONE";status.textContent="entries: "+data.entries_count+" / notes: "+data.notes_count;saveStats(data.entries_count,data.notes_count);loadStats();showWhisper()}else{throw new Error(data.error||"unknown")}}catch(e){btn.className="btn error";btn.textContent="FAIL";status.textContent=e.message}setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},3000)}
+async function doDownload(){
+  var b=document.getElementById("dlbtn");
+  var status=document.getElementById("status");
+  b.className="btn-small loading";b.textContent="...";status.textContent="";
+  try{
+    var res=await fetch(SB_URL+"/functions/v1/export-local",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}
+    });
+    if(res.status===401){
+      b.className="btn-small error";b.textContent="PIN";onAuthFail();
+      setTimeout(function(){b.className="btn-small";b.textContent="LOCAL"},2000);return;
+    }
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    var data=await res.json();
+    if(data.error) throw new Error(data.error);
+
+    var now=new Date();
+    var ts=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"_"+pad(now.getHours())+pad(now.getMinutes());
+    var jsonStr=JSON.stringify(data,null,2);
+    var filename="memoria_"+ts+".json";
+
+    // try native share on mobile, fall back to download link
+    var shared=false;
+    if(navigator.share&&navigator.canShare){
+      try{
+        var file=new File([jsonStr],filename,{type:"application/json"});
+        if(navigator.canShare({files:[file]})){
+          await navigator.share({files:[file],title:"Memoria Backup"});
+          shared=true;
+        }
+      }catch(shareErr){
+        // user cancelled or share not supported, fall back to download
+        if(shareErr.name!=="AbortError") console.log("share failed:",shareErr);
+      }
+    }
+    if(!shared){
+      triggerDownload(jsonStr, filename);
+    }
+
+    b.className="btn-small success";b.textContent="DONE";
+    localStorage.setItem("local_last",now.toISOString());
+    localStorage.setItem("backup_entries",String(data.entries_count));
+    localStorage.setItem("backup_notes",String(data.notes_count));
+    loadStats();
+  }catch(e){
+    b.className="btn-small error";b.textContent="FAIL";
+    status.textContent=e.message||String(e);
+  }
+  setTimeout(function(){b.className="btn-small";b.textContent="LOCAL"},3000);
+}
+
+async function doBackup(){var btn=document.getElementById("btn"),status=document.getElementById("status");btn.className="btn loading";btn.textContent="...";status.textContent="";document.getElementById("whisper").style.opacity="0";try{var res=await fetch(API_URL,{method:"POST",headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}});if(res.status===401){btn.className="btn error";btn.textContent="PIN";onAuthFail();setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},2000);return}var data=await res.json();if(data.success){btn.className="btn success";btn.textContent="DONE";status.textContent="entries: "+data.entries_count+" / notes: "+data.notes_count;saveStats(data.entries_count,data.notes_count);loadStats();showWhisper()}else{throw new Error(data.error||"unknown")}}catch(e){btn.className="btn error";btn.textContent="FAIL";status.textContent=e.message||String(e)}setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},3000)}
 
 loadStats();
 </script>
