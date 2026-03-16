@@ -151,7 +151,7 @@ async function doDownload(){
     }
     if(!res.ok) throw new Error("HTTP "+res.status);
     var data=await res.json();
-    if(data.error) throw new Error(data.error);
+    if(data.error){var de=data.error;throw new Error(typeof de==="object"?(de.message||JSON.stringify(de)):de)}
 
     var now=new Date();
     var ts=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate())+"_"+pad(now.getHours())+pad(now.getMinutes());
@@ -183,12 +183,12 @@ async function doDownload(){
     loadStats();
   }catch(e){
     b.className="btn-small error";b.textContent="FAIL";
-    status.textContent=e.message||String(e);
+    status.textContent=e.message||(typeof e==="object"?JSON.stringify(e):String(e));
   }
   setTimeout(function(){b.className="btn-small";b.textContent="LOCAL"},3000);
 }
 
-async function doBackup(){var btn=document.getElementById("btn"),status=document.getElementById("status");btn.className="btn loading";btn.textContent="...";status.textContent="";document.getElementById("whisper").style.opacity="0";try{var res=await fetch(API_URL,{method:"POST",headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}});if(res.status===401){btn.className="btn error";btn.textContent="PIN";onAuthFail();setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},2000);return}if(!res.ok) throw new Error("HTTP "+res.status);var data=await res.json();if(data.success){btn.className="btn success";btn.textContent="DONE";status.textContent="entries: "+data.entries_count+" / notes: "+data.notes_count;saveStats(data.entries_count,data.notes_count);loadStats();showWhisper()}else{var errMsg=data.error;throw new Error(errMsg&&typeof errMsg==="object"?JSON.stringify(errMsg):errMsg||"unknown")}}catch(e){btn.className="btn error";btn.textContent="FAIL";status.textContent=e.message||String(e)}setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},3000)}
+async function doBackup(){var btn=document.getElementById("btn"),status=document.getElementById("status");btn.className="btn loading";btn.textContent="...";status.textContent="";document.getElementById("whisper").style.opacity="0";try{var res=await fetch(API_URL,{method:"POST",headers:{"Authorization":"Bearer "+API_KEY,"x-app-pin":sessionPin}});if(res.status===401){btn.className="btn error";btn.textContent="PIN";onAuthFail();setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},2000);return}if(!res.ok) throw new Error("HTTP "+res.status);var data=await res.json();if(data.success){btn.className="btn success";btn.textContent="DONE";status.textContent="entries: "+data.entries_count+" / notes: "+data.notes_count;saveStats(data.entries_count,data.notes_count);loadStats();showWhisper()}else{var errMsg=data.error;throw new Error(errMsg&&typeof errMsg==="object"?(errMsg.message||JSON.stringify(errMsg)):errMsg||"unknown")}}catch(e){btn.className="btn error";btn.textContent="FAIL";status.textContent=e.message||(typeof e==="object"?JSON.stringify(e):String(e))}setTimeout(function(){btn.className="btn";btn.textContent="BACKUP"},3000)}
 
 loadStats();
 </script>
